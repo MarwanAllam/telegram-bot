@@ -4,7 +4,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 # هنا تحط التوكن بتاعك
 TOKEN = "8427063575:AAGyQSTbjGHOrBHhZeVucVnNWc47amwR7RA"
 
-# بنخزن حالة كل جروب
+
 queues = {}
 
 def make_main_keyboard(chat_id):
@@ -200,63 +200,3 @@ app.add_handler(CallbackQueryHandler(button))
 
 print("🤖 البوت شغال...")
 app.run_polling()
-    elif action == "remove_member":
-        if user.id != q["creator"]:
-            await query.answer("🚫 مش من صلاحياتك.")
-            return
-        index = int(parts[2])
-        if 0 <= index < len(q["members"]):
-            target = q["members"].pop(index)
-            q["removed"].add(target)
-
-        members_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(q["members"])]) or "(فاضية)"
-        text = f"🎯 الدور شغال\n\n*القائمة الحالية:*\n{members_text}"
-        await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
-        await query.answer(f"❌ تم حذف {target}")
-
-    # 🔙 إلغاء قائمة الريموف
-    elif action == "cancel_remove":
-        members_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(q["members"])]) or "(فاضية)"
-        text = f"🎯 الدور شغال\n\n*القائمة الحالية:*\n{members_text}"
-        await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
-        await query.answer("تم الإلغاء ✅")
-
-    # 🔒 قفل الدور
-    elif action == "close":
-        if user.id != q["creator"]:
-            await query.answer("🚫 بس اللي بدأ الدور يقدر يقفله.")
-            return
-        q["closed"] = True
-
-        text = "🔒 تم قفل الدور.\nالتسجيل متوقف ✅"
-        await query.edit_message_text(text)
-        await query.answer("تم القفل.")
-
-        all_joined = list(q["all_joined"])
-        removed = list(q["removed"])
-        remaining = [n for n in q["members"] if n not in removed]
-
-        full_list_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(all_joined)]) or "(فاضية)"
-        removed_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(removed)]) or "(مفيش)"
-        remaining_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(remaining)]) or "(مفيش)"
-
-        final_text = (
-            "📋 *القائمة النهائية للدور:*\n\n"
-            "👥 *كل اللي سجلوا فعلاً (اللي كانوا جزء من الدور):*\n"
-            f"{full_list_text}\n\n"
-            "✅ *تمت القراءه:*\n"
-            f"{removed_text}\n\n"
-            "❌ *لم يقرأ:*\n"
-            f"{remaining_text}"
-        )
-
-        await query.message.reply_text(final_text, parse_mode="Markdown")
-
-app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("forceclose", force_close))
-app.add_handler(CallbackQueryHandler(button))
-
-print("🤖 البوت شغال...")
-app.run_polling()
-
