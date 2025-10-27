@@ -23,10 +23,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     # ✅ منع تشغيل /start جديد لو الدور الحالي مفتوح
-    if chat_id in queues and not queues[chat_id]["closed"]:
-        await update.message.reply_text("⚠️ فيه دور شغال بالفعل، اقفله الأول قبل تبدأ جديد.")
+    q = queues.get(chat_id)
+    if q and not q["closed"]:
+        await update.message.reply_text(
+            "⚠️ فيه دور شغال بالفعل. استخدم /forceclose لو عايز تقفله وتبدأ جديد."
+        )
         return
 
+    # إنشاء الدور الجديد
     queues[chat_id] = {
         "creator": user.id,
         "members": [],
@@ -41,6 +45,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=make_main_keyboard(chat_id),
         parse_mode="Markdown"
     )
+
+async def force_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+
+    q = queues.get(chat_id)
+    if not q:
+        await update.message.reply_text("❌ مفيش دور شغال دلوقتي.")
+        return
+
+    if user.id != q["creator"]:
+        await update.message.reply_text("🚫 بس اللي بدأ الدور يقدر يقفله.")
+        return
+
+    del queues[chat_id]
+    await update.message.reply_text("✅ تم إنهاء الدور والجلسة السابقة اتقفلت.")
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -62,12 +82,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         name = user.full_name
 
-        # ✅ لو الشخص اتمسح ممنوع يسجل تاني
         if name in q["removed"]:
             await query.answer("🚫 تم حذفك من الدور. استنى الدور الجديد.")
             return
 
-        # لو هو موجود بالفعل → ينسحب (ويتحذف من كل القوائم)
         if name in q["members"]:
             q["members"].remove(name)
             if name in q["all_joined"]:
@@ -129,17 +147,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         q["closed"] = True
 
-        # 🔒 تحديث الرسالة الرئيسية
         text = "🔒 تم قفل الدور.\nالتسجيل متوقف ✅"
         await query.edit_message_text(text)
         await query.answer("تم القفل.")
 
-        # 🧾 إنشاء القوائم الثلاث
         all_joined = list(q["all_joined"])
         removed = list(q["removed"])
         remaining = [n for n in q["members"] if n not in removed]
 
-        # 🧩 تكوين النص النهائي
         full_list_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(all_joined)]) or "(فاضية)"
         removed_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(removed)]) or "(مفيش)"
         remaining_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(remaining)]) or "(مفيش)"
@@ -154,11 +169,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{remaining_text}"
         )
 
-        # 📤 إرسال النتيجة النهائية
         await query.message.reply_text(final_text, parse_mode="Markdown")
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("forceclose", force_close))
 app.add_handler(CallbackQueryHandler(button))
 
 print("🤖 البوت شغال...")
