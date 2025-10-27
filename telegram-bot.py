@@ -26,13 +26,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q = queues.get(chat_id)
     if q and not q["closed"]:
-        await update.message.reply_text("⚠️ فيه دور شغال بالفعل. استخدم /forceclose لو عايز تبدأ جديد.")
+        await update.message.reply_text("⚠️ فيه دور شغال بالفعل. اقفله الأول أو استخدم /forceclose.")
         return
 
     queues[chat_id] = {
         "creator": user.id,
         "admins": set(),
-        "members": [],  # [{id, name}]
+        "members": [],
         "removed": set(),
         "all_joined": set(),
         "closed": False
@@ -47,7 +47,7 @@ async def force_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q = queues.get(chat_id)
     if not q:
-        await update.message.reply_text("❌ مفيش دور شغال دلوقتي.")
+        await update.message.reply_text("❌ مفيش دور شغال.")
         return
 
     if user.id != q["creator"]:
@@ -55,14 +55,7 @@ async def force_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     del queues[chat_id]
-    await update.message.reply_text("✅ تم إنهاء الدور والجلسة السابقة اتقفلت.")
-
-async def update_main_message(query, chat_id, q):
-    members_text = "\n".join([
-        f"{i+1}. {m['name']} {'👮' if m['id'] in q['admins'] else ''}" for i, m in enumerate(q["members"])
-    ]) or "(فاضية)"
-    text = f"🎯 الدور شغال\n\n*القائمة الحالية:*\n{members_text}"
-    await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
+    await update.message.reply_text("✅ تم إنهاء الجلسة الحالية.")
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -77,48 +70,46 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ مفيش دور شغال.")
         return
 
-    # 📝 انضم / انسحب
     if action == "join":
         if q["closed"]:
             await query.answer("🚫 التسجيل مقفول.")
             return
+        name = user.full_name
 
-        if user.full_name in q["removed"]:
+        if name in q["removed"]:
             await query.answer("🚫 تم حذفك من الدور. استنى الدور الجديد.")
             return
 
-        member = next((m for m in q["members"] if m["id"] == user.id), None)
-        if member:
-            q["members"].remove(member)
-            q["all_joined"].discard(user.full_name)
+        if name in q["members"]:
+            q["members"].remove(name)
+            q["all_joined"].discard(name)
             await query.answer("❌ تم انسحابك.")
         else:
-            q["members"].append({"id": user.id, "name": user.full_name})
-            q["all_joined"].add(user.full_name)
+            q["members"].append(name)
+            q["all_joined"].add(name)
             await query.answer("✅ تم تسجيلك!")
 
-        await update_main_message(query, chat_id, q)
+        members_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(q["members"])]) or "(فاضية)"
+        text = f"🎯 الدور شغال\n\n*القائمة الحالية:*\n{members_text}"
+        await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
 
-    # 🗑️ فتح قائمة الريموف
     elif action == "remove_menu":
         if not is_admin_or_creator(user.id, q):
             await query.answer("🚫 مش من صلاحياتك.")
             return
-
         if not q["members"]:
             await query.answer("📋 مفيش حد في الدور.")
             return
 
-        keyboard = [
-            [InlineKeyboardButton(f"❌ {m['name']}", callback_data=f"remove_member|{chat_id}|{i}")]
-            for i, m in enumerate(q["members"])
-        ]
+        keyboard = []
+        for i, n in enumerate(q["members"]):
+            keyboard.append([InlineKeyboardButton(f"❌ {n}", callback_data=f"remove_member|{chat_id}|{i}")])
         keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data=f"cancel_remove|{chat_id}")])
+
         await query.edit_message_text("🗑️ *اختر الاسم اللي عايز تمسحه:*",
                                       reply_markup=InlineKeyboardMarkup(keyboard),
                                       parse_mode="Markdown")
 
-    # ❌ حذف اسم
     elif action == "remove_member":
         if not is_admin_or_creator(user.id, q):
             await query.answer("🚫 مش من صلاحياتك.")
@@ -126,58 +117,79 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         index = int(parts[2])
         if 0 <= index < len(q["members"]):
             target = q["members"].pop(index)
-            q["removed"].add(target["name"])
-            await query.answer(f"❌ تم حذف {target['name']}")
-        await update_main_message(query, chat_id, q)
+            q["removed"].add(target)
+
+        members_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(q["members"])]) or "(فاضية)"
+        text = f"🎯 الدور شغال\n\n*القائمة الحالية:*\n{members_text}"
+        await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
+        await query.answer(f"❌ تم حذف {target}")
 
     elif action == "cancel_remove":
-        await update_main_message(query, chat_id, q)
+        members_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(q["members"])]) or "(فاضية)"
+        text = f"🎯 الدور شغال\n\n*القائمة الحالية:*\n{members_text}"
+        await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
         await query.answer("تم الإلغاء ✅")
 
-    # 🔒 قفل الدور
     elif action == "close":
         if not is_admin_or_creator(user.id, q):
             await query.answer("🚫 مش من صلاحياتك.")
             return
+
         q["closed"] = True
-        await query.edit_message_text("🔒 تم قفل الدور.\nالتسجيل متوقف ✅")
+        text = "🔒 تم قفل الدور.\nالتسجيل متوقف ✅"
+        await query.edit_message_text(text)
         await query.answer("تم القفل.")
 
-    # ⭐ إدارة المشرفين
+        all_joined = list(q["all_joined"])
+        removed = list(q["removed"])
+        remaining = [n for n in q["members"] if n not in removed]
+
+        full_list_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(all_joined)]) or "(فاضية)"
+        removed_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(removed)]) or "(مفيش)"
+        remaining_text = "\n".join([f"{i+1}. {n}" for i, n in enumerate(remaining)]) or "(مفيش)"
+
+        final_text = (
+            "📋 *القائمة النهائية للدور:*\n\n"
+            "👥 *كل اللي شاركوا فعليًا:*\n"
+            f"{full_list_text}\n\n"
+            "✅ *تمت القراءه:*\n"
+            f"{removed_text}\n\n"
+            "❌ *لم يقرأ:*\n"
+            f"{remaining_text}"
+        )
+        await query.message.reply_text(final_text, parse_mode="Markdown")
+
     elif action == "manage_admins":
         if user.id != q["creator"]:
             await query.answer("🚫 بس اللي بدأ الدور يقدر يدير المشرفين.")
             return
-
         if not q["members"]:
             await query.answer("📋 مفيش حد في الدور.")
             return
 
         keyboard = []
-        for m in q["members"]:
-            label = f"❌ أزل {m['name']} من المشرفين" if m["id"] in q["admins"] else f"⭐ عيّن {m['name']} مشرف"
-            keyboard.append([InlineKeyboardButton(label, callback_data=f"toggle_admin|{chat_id}|{m['id']}|{m['name']}")])
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data=f"cancel_remove|{chat_id}")])
+        for n in q["members"]:
+            label = f"⭐ أزل {n} من المشرفين" if n in q["admins"] else f"⭐ عيّن {n} مشرف"
+            keyboard.append([InlineKeyboardButton(label, callback_data=f"toggle_admin|{chat_id}|{n}")])
+        keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data=f"cancel_remove|{chat_id}")])
+
         await query.edit_message_text("👮 *إدارة المشرفين:*",
                                       reply_markup=InlineKeyboardMarkup(keyboard),
                                       parse_mode="Markdown")
 
-    # ✅ تعيين / إزالة مشرف
     elif action == "toggle_admin":
         if user.id != q["creator"]:
             await query.answer("🚫 بس اللي بدأ الدور يقدر يعمل كده.")
             return
-
-        target_id = int(parts[2])
-        target_name = parts[3]
-
-        if target_id in q["admins"]:
-            q["admins"].remove(target_id)
+        target_name = parts[2]
+        if target_name in q["admins"]:
+            q["admins"].remove(target_name)
         else:
-            q["admins"].add(target_id)
-
-        # نرجع مباشرة للرسالة الرئيسية المحدثة
-        await update_main_message(query, chat_id, q)
+            q["admins"].add(target_name)
+        await query.answer("✅ تم تحديث المشرفين.")
+        members_text = "\n".join([f"{i+1}. {n}{' 👮' if n in q['admins'] else ''}" for i, n in enumerate(q["members"])]) or "(فاضية)"
+        text = f"🎯 الدور شغال\n\n*القائمة الحالية:*\n{members_text}"
+        await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
