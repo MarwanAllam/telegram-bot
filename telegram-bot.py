@@ -1,5 +1,8 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler,
+    MessageHandler, filters, ContextTypes
+)
 
 # هنا تحط التوكن بتاعك
 TOKEN = "8427063575:AAGyQSTbjGHOrBHhZeVucVnNWc47amwR7RA"
@@ -246,3 +249,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, collect_info))
 
 print("🤖 البوت شغال...")
 app.run_polling()
+
