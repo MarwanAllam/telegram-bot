@@ -7,7 +7,6 @@ from telegram.ext import (
 # هنا تحط التوكن بتاعك
 TOKEN = "8427063575:AAGyQSTbjGHOrBHhZeVucVnNWc47amwR7RA"
 
-
 queues = {}
 awaiting_input = {}  # لتخزين المرحلة الحالية من الأسئلة لكل شات
 
@@ -242,11 +241,29 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("👮 *إدارة المشرفين:*",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+
+# 🛑 أمر /forceclose لقفل الدور إجباريًا
+async def force_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    q = queues.get(chat_id)
+
+    if not q:
+        await update.message.reply_text("⚠️ مفيش دور مفتوح حالياً.")
+        return
+
+    if update.effective_user.id != q["creator"]:
+        await update.message.reply_text("🚫 بس اللي بدأ الدور يقدر يقفله إجباريًا.")
+        return
+
+    q["closed"] = True
+    await update.message.reply_text("🚨 تم قفل الدور *إجباريًا* بنجاح ✅", parse_mode="Markdown")
+
+
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("forceclose", force_close))
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, collect_info))
 
 print("🤖 البوت شغال...")
 app.run_polling()
-
