@@ -42,6 +42,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def collect_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ تجاهل أي تحديث مفيهوش رسالة نصية
+    if not update.message or not update.message.text:
+        return
+
     chat_id = update.effective_chat.id
     user_input = update.message.text.strip()
 
@@ -59,12 +63,12 @@ async def collect_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif step == "class_name":
         teacher_name = awaiting_input[chat_id]["teacher"]
         class_name = user_input
-        creator_name = update.effective_user.full_name  # 👈 اسم اللي بدأ الدور
+        creator_name = update.effective_user.full_name  # 👤 اسم اللي بدأ الدور
 
         # إنشاء الدور
         queues[chat_id] = {
             "creator": update.effective_user.id,
-            "creator_name": creator_name,  # 👈 حفظ اسم المنشئ
+            "creator_name": creator_name,
             "admins": set(),
             "members": [],
             "removed": set(),
@@ -181,6 +185,18 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(text, reply_markup=make_main_keyboard(chat_id), parse_mode="Markdown")
         await query.answer("تم الإلغاء ✅")
+
+    elif action == "close":
+        if not is_admin_or_creator(user.id, q):
+            await query.answer("🚫 مش من صلاحياتك.")
+            return
+
+        if not q["members"]:
+            await query.answer("📋 مفيش حد في الدور يقفل عليه.")
+            return
+
+        q["closed"] = True
+        await query.edit_message_text("🔒 تم قفل الدور.\nالتسجيل متوقف ✅")
 
 
 # ✅ أمر /forceclose لأي مستخدم
